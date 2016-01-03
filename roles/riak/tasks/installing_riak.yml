@@ -1,0 +1,44 @@
+## Copyright 2015 StreamBright LLC
+#
+## Licensed under the Apache License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+#
+##     http://www.apache.org/licenses/LICENSE-2.0
+#
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+---
+- name: Installing epel
+  yum:  name=epel-release state=present
+  sudo: yes
+  tags: installing_riak
+
+- name: Installing python-httplib2
+  yum:  name=python-httplib2 state=present
+  sudo: yes
+  tags: installing_riak
+
+- name: Installing Riak
+  yum: name=riak state=present
+  sudo: yes
+  tags: installing_riak
+
+- name: Rendering Riak configuration
+  template: src=riak.conf.j2 dest={{ riak_config_file }} owner=root group=root mode=0644
+  sudo: yes
+  tags: installing_riak
+
+- name: Checking data folder
+  stat: path={{ data_folder }}
+  register: data_folder_created
+  tags: installing_riak
+
+- name: Assigning ownership to riak user
+  command: "chown riak:riak {{ data_folder }}"
+  when: not data_folder_created.stat.pw_name == "riak"
+  sudo: yes
+  tags: installing_riak

@@ -1,0 +1,32 @@
+## Copyright 2015 StreamBright LLC
+#
+## Licensed under the Apache License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+#
+##     http://www.apache.org/licenses/LICENSE-2.0
+#
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+---
+#If there is any FS on the device this is skipped
+#
+- name: Creating FS on the specified device if there is none
+  filesystem: fstype=xfs dev={{ ebs_device }}
+  sudo: yes
+
+- name: Checking data folder
+  stat: path={{ data_folder }}
+  register: data_folder_created
+
+- name: Creating data folder
+  file: path={{ data_folder }} state=directory mode=0770
+  when: data_folder_created.stat.exists == false
+  sudo: yes
+
+- name: Mounting data folder
+  mount: name={{ data_folder }} src={{ ebs_device }} fstype=xfs opts="noatime,nodiratime,nosuid,nodev,allocsize=64m" state=mounted
+  sudo: yes

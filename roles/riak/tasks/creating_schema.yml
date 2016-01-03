@@ -1,0 +1,164 @@
+## Copyright 2015 StreamBright LLC
+#
+## Licensed under the Apache License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+#
+##     http://www.apache.org/licenses/LICENSE-2.0
+#
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+---
+- name: Checking folder for Solr schemas
+  stat: path={{ solr_schema_home }}
+  register: riak_schema_folder_created
+  tags: creating_schema
+
+- name: Creating folder for Solr schemas
+  file: path={{ solr_schema_home }} owner={{ riak_user }} group={{ riak_group }} mode={{ solr_schema_home_permission }} state=directory
+  when: riak_schema_folder_created.stat.exists == false
+  sudo: yes
+  tags: creating_schema
+
+- name: Deploying Solr schemas and indexes
+  copy: src={{ item }} dest={{ solr_schema_home }}/{{ item }}
+  with_items:
+    - sch_cpcs.xml
+    - idx_cpcs.json
+    - bck_cpcs.json
+  sudo: yes
+  tags: creating_schema
+
+- name: Checking if schema already exists 
+  uri:
+    url: http://{{ riak_server_int }}:10018/search/schema/{{ item }} 
+    return_content: no
+  register: http_sch_responses
+  with_items:
+    - sch_cpcs
+  failed_when: false
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  tags: creating_schema
+
+- name: Uploading schema
+  uri:
+    url: http://{{ riak_server_int }}:10018/search/schema/{{ item.item }}
+    method: PUT
+    body: "{{ lookup('file', item.item + '.xml') }}"
+    HEADER_Content-Type: "application/xml"
+  register: http_response_sch_uploads
+  when: item.status == 400 or item.status == 404
+  failed_when: false
+  with_items: http_sch_responses.results
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  tags: creating_schema
+
+- name: Checking if index already exists
+  uri:
+    url: http://{{ riak_server_int }}:10018/search/index/{{ item }}
+    return_content: no
+  register: http_idx_responses
+  with_items:
+    - idx_cpcs
+  failed_when: false
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  tags: creating_schema
+
+# there is a bug with this, it seems content type is not received by Riak
+# https://github.com/ansible/ansible/issues/9472
+# bad:
+# Ncat: Version 6.40 ( http://nmap.org/ncat )
+# Ncat: Listening on :::10001
+# Ncat: Listening on 0.0.0.0:10001
+# Ncat: Connection from 10.10.10.11.
+# Ncat: Connection from 10.10.10.11:49940.
+# PUT /search/schema/idx_cpcs HTTP/1.1
+# Host: 10.10.10.11:10001
+# Content-Length: 99
+# content-type: application/json
+# accept-encoding: gzip, deflate
+# user-agent: Python-httplib2/0.7.7 (gzip)
+#
+# "{\"schema\":\"sch_cpcs\", \"n_val\": 1, \"allow_mult\": \"false\", \"last_write_wins\": \"true\"}"Ncat: Version 6.40 ( http://nmap.org/ncat )
+#
+#good:
+#Ncat: Version 6.40 ( http://nmap.org/ncat )
+#Ncat: Listening on :::10001
+#Ncat: Listening on 0.0.0.0:10001
+#Ncat: Connection from 10.10.10.11.
+#Ncat: Connection from 10.10.10.11:50014.
+#PUT /search/index/idx_cpcs HTTP/1.1
+#User-Agent: curl/7.29.0
+#Host: 10.10.10.11:10001
+#Accept: */*
+#content-type:application/json
+#Content-Length: 83
+#
+#{"schema":"sch_cpcs", "n_val": 1, "allow_mult": "false", "last_write_wins": "true"}
+#
+# - name: Uploading indexes
+#   uri:
+#     url: http://{{ riak_server_int }}:10018/search/schema/{{ item.item }}
+#     method: PUT
+#     HEADER_Content-Type: "application/json"
+#     body: "{{ lookup('file', item.item + '.json') | to_json }}"
+#   register: http_response_idx_uploads
+#   when: item.status == 400 or item.status == 404
+#   failed_when: false
+#   with_items: http_idx_responses.results
+#   run_once: true
+#   delegate_to: "{{ riak_server_ext }}"
+#   tags: creating_schema
+
+- name: Uploading indexes
+  command: curl -sXPUT -H'content-type:application/json' -d@"{{ '/etc/riak/schema/' + item.item + '.json' }}" http://{{ riak_server_int }}:10018/search/index/{{ item.item }}
+  register: http_response_idx_uploads
+  when: item.status == 400 or item.status == 404
+  failed_when: false
+  with_items: http_idx_responses.results
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  tags: creating_schema
+
+- name: Checking bucket types
+  command: /usr/sbin/riak-admin bucket-type status {{ item }} | egrep -q 'active:\ true'
+  sudo: yes
+  register: existing_bucket_types
+  with_items:
+    - cpcs
+  failed_when: false
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  tags: creating_schema
+
+- name: Creating bucket types
+  command: /usr/sbin/riak-admin bucket-type create {{ item.item }} {{ lookup('file', 'bck_' + item.item + '.json') | to_json }}
+  sudo: yes
+  register: creating_bucket_types
+  when: item.rc == 1
+  with_items: existing_bucket_types.results
+  failed_when: false
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  tags: creating_schema
+
+- name: Activating bucket types
+  command: /usr/sbin/riak-admin bucket-type activate {{ item.item }}
+  sudo: yes
+  register: activating_bucket_types
+  when: item.rc == 1
+  with_items: existing_bucket_types.results
+  failed_when: false
+  run_once: true
+  delegate_to: "{{ riak_server_ext }}"
+  tags: creating_schema
+
+
+

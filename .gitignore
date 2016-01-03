@@ -1,0 +1,6 @@
+.vagrant/
+roles/riak/files/node.*
+*.vdi
+HEADER
+apply.sh
+doc.md

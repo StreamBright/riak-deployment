@@ -1,0 +1,31 @@
+## Copyright 2015 StreamBright LLC
+#
+## Licensed under the Apache License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+#
+##     http://www.apache.org/licenses/LICENSE-2.0
+#
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+---
+- name: Checking Basho repository exists
+  stat: path={{ basho_repository_file }}
+  register: basho_repository_created
+
+- name: Rendering Basho repository
+  template: src=basho_riak.repo.j2 dest={{ basho_repository_file }} owner=root group=root mode=0644
+  when: basho_repository_created.stat.exists == false
+  sudo: yes
+
+- name: Checking if Basho GPG key is already imported
+  stat: path=/var/lib/yum/repos/x86_64/7/basho_riak/gpgdir
+  register: basho_gpg_imported
+
+- name: Importing GPG key for Basho repository
+  command: yum search riak -y
+  when: basho_gpg_imported.stat.exists == false
+  sudo: yes
