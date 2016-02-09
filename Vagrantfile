@@ -24,11 +24,11 @@ SYSTEM_USER=$(grep "^#{unix_user}" /etc/passwd)
 if [ -z "$SYSTEM_USER" ]; then
     echo "#{unix_user} user does not exists"
     adduser "#{unix_user}" -m
-    mkdir -p /home/#{unix_user}/.ssh/
-    echo "#{ssh_key}" >> /home/#{unix_user}/.ssh/authorized_keys
-    chmod 700 /home/#{unix_user}/.ssh/
-    chmod 600 /home/#{unix_user}/.ssh/authorized_keys
-    chown -R #{unix_user}:#{unix_group} /home/#{unix_user}/.ssh
+    mkdir -p "/home/#{unix_user}/.ssh/"
+    echo "#{ssh_key}" >> "/home/#{unix_user}/.ssh/authorized_keys"
+    chmod 700 "/home/#{unix_user}/.ssh/"
+    chmod 600 "/home/#{unix_user}/.ssh/authorized_keys"
+    chown -R "#{unix_user}":"#{unix_group}" "/home/#{unix_user}/.ssh"
     echo "#{unix_user} ALL=(ALL)       NOPASSWD:       ALL" >> /etc/sudoers
 fi
 SCRIPT
